@@ -1,71 +1,260 @@
 #include <mega328p.h>
 #include <delay.h>
+#include <alcd.h>
+#include <stdio.h>
+
+#define openBtn 1023
+#define closeBtn 731
+#define leftBtn 539
+#define rightBtn 394
+#define upBtn 269
+#define downBtn 146
+#define OC_DDR DDRB.3
+#define LR_DDR DDRD.3
+#define UD_DDR DDRD.6
+#define OC_PORT PORTB.3
+#define LR_PORT PORTB.3
+#define UD_PORT PORTB.6
+#define TRIGGER_DDR DDRB.1
+#define ECHO_DDR DDRB.0
+#define TRIGGER_PORT PORTB.1
+#define ECHO_PORT PORTB.0
+#define ADC_VREF_TYPE 0x40
+
+int distance;
+int timerOverFlow = 0;
+
+interrupt [TIM1_OVF] void timer1_ovf_isr(void)
+{
+    timerOverFlow++;
+}
+
+// Read the AD conversion result
+unsigned int read_adc(unsigned char adc_input)
+{
+ADMUX=adc_input | (ADC_VREF_TYPE & 0xff);
+// Delay needed for the stabilization of the ADC input voltage
+delay_us(10);
+// Start the AD conversion
+ADCSRA|=0x40;
+// Wait for the AD conversion to complete
+while ((ADCSRA & 0x10)==0);
+ADCSRA|=0x10;
+return ADCW;
+}
+
+void disPlayLCD(unsigned int thamSo)        
+{
+    unsigned char chucNgan, ngan, tram, chuc, donVi;
+    chucNgan = thamSo/10000;
+    ngan = thamSo/1000%10;
+    tram = thamSo/100%10;
+    chuc = thamSo/10%10;
+    donVi = thamSo%10;
+    lcd_putchar(chucNgan + 48);    
+    lcd_putchar(ngan + 48);    
+    lcd_putchar(tram + 48);    
+    lcd_putchar(chuc + 48);    
+    lcd_putchar(donVi + 48);          
+}
+
+void activeDistantSensor()
+{
+    int duration;
+    //char buffer[]; 
+    // Trigger transmit pulse
+    TRIGGER_PORT = 0;
+    delay_ms(2);
+    TRIGGER_PORT = 1;
+    delay_us(10);
+    TRIGGER_PORT = 0;  
+    // Delete timer1
+    TCNT1H = 0;
+    TCNT1L = 0; 
+    TCCR1B=0x41; // Catch rising edge mode
+    TIFR1=0b00100001; // Delete input capture and overflow flag 
+    
+    // Compute pulse width   
+    while(TIFR1 & (1 << ICF1) == 0); // Waiting rising edge 
+    // Delete timer1
+    TCNT1H = 0;
+    TCNT1L = 0; 
+    TCCR1B=0x01; // Catch falling edge mode
+    TIFR1=0b00100001; // Delete input capture and overflow flag 
+    timerOverFlow = 0; // Delete timer1 value 
+    
+    while(TIFR1 & (1 << ICF1) == 0); // Waiting falling edge
+    duration = (ICR1H*256 + ICR1L) + (65535*timerOverFlow);    
+    distance = (int)duration/466.47;
+//    sprintf(buffer, "Dis: %d", distance);
+//    lcd_puts(buffer);
+    disPlayLCD(distance);
+}
+
+
+// Open mirror
+void open()
+{
+    OCR2A = 20;            
+    //lcd_puts("Opening");   
+    delay_ms(1500);  
+}
+
+// Close mirror
+void close()
+{
+    OCR2A = 5;  
+    OCR0B = 15;
+    OCR0A = 15; 
+    //lcd_puts("Closing");  
+    delay_ms(1500);   
+}
+
+// Adjust left
+void adjustLeft()
+{
+    if(OCR2B > 10)
+    {
+        OCR2B--; 
+        //lcd_puts("Adjusting Left");  
+    }   
+    else
+    {
+        //lcd_puts("Completely Left");  
+        delay_ms(500);     
+    }
+}
+
+// Adjust right
+void adjustRight()
+{
+    if(OCR2B < 19) 
+    {
+        OCR2B++;
+        //lcd_puts("Adjusting Right");  
+    }                
+    else
+    {
+        //lcd_puts("Completely Right");  
+        delay_ms(500); 
+    }
+}
+
+// Adjust up
+void adjustUp()
+{
+    if(OCR0A < 19) 
+    {
+        OCR0A++;  
+        //lcd_puts("Adjusting Up"); 
+    }  
+    else
+    {
+        //lcd_puts("Completely Up"); 
+        delay_ms(500);
+    }
+}
+
+// Adjust down
+void adjustDown()
+{
+    if(OCR0A > 10)
+    {
+        OCR0A--;   
+        //lcd_puts("Adjusting Down");
+    }
+    else
+    {   
+        //lcd_puts("Completely Down"); 
+        delay_ms(500);
+    }
+}
 
 void main(void)
 {
+unsigned int curBtn;
 
-//// Crystal Oscillator division factor: 1
-//#pragma optsize-
-//CLKPR=0x80;
-//CLKPR=0x00;
-//#ifdef _OPTIMIZE_SIZE_
-//#pragma optsize+
-//#endif
+// Crystal Oscillator division factor: 1
+#pragma optsize-
+CLKPR=0x80;
+CLKPR=0x00;
+#ifdef _OPTIMIZE_SIZE_
+#pragma optsize+
+#endif
 
 // Timer/Counter 0 initialization
-// Clock source: System Clock
-// Clock value: Timer 0 Stopped
-// Mode: Normal top=0xFF
-// OC0A output: Disconnected
-// OC0B output: Disconnected
-TCCR0A=0b10100011;
+TCCR0A=0b10000011;
 TCCR0B=0b00000101;
 TCNT0=0;
-OCR0A=5;
-OCR0B=5;
-
+OCR0A=15;
+OCR0B=0;
 
 // Timer/Counter 2 initialization
-// Clock source: System Clock
-// Clock value: Timer2 Stopped
-// Mode: Normal top=0xFF
-// OC2A output: Disconnected
-// OC2B output: Disconnected
-TCCR2A=0b10000011;
+TCCR2A=0b10100011;
 TCCR2B=0b00000111;
 TCNT2=0;
-OCR2A=5;
-OCR2B=0;
+OCR2A=0;
+OCR2B=15;
 
+// Timer/Counter 1 initialization
+TCCR1A=0x00;
+TCCR1B=0x00;
+TCNT1H=0x00;
+TCNT1L=0x00;
 
-PORTC.0 = 1;
-PORTC.1 = 1;
-PORTC.2 = 1;
-PORTC.3 = 1;
-DDRD.5 = 1;
-DDRD.6 = 1;
-DDRB.3 = 1;
+// Timer/Counter 1 Interrupt(s) initialization
+TIMSK1=0b00000001;
+
+// ADC initialization
+DIDR0=0x20;
+ADMUX=ADC_VREF_TYPE & 0xff;
+ADCSRA=0x81;
+
+// Characters/line: 16
+lcd_init(16);
+
+//Set up PWM Servo ports is output
+OC_DDR = 1;
+LR_DDR = 1;
+UD_DDR = 1;
+
+// Set up Trigger and Echo for Sensor
+TRIGGER_DDR = 1; // Trigger port is output
+ECHO_DDR = 0; // Echo port is input
 
 #asm("sei")
 
 while (1)
-      {
-        if(PINC.0 == 0)
-        {   
-            OCR0A++;  
+      {    
+        lcd_clear();           
+        lcd_gotoxy(0,0);  
+        activeDistantSensor();      
+        curBtn = read_adc(5);  
+        
+        if(curBtn == openBtn)
+        {
+            open();            
         }   
-        if(PINC.1 == 0)
+        else if(curBtn == closeBtn)
         {
-            OCR0B++;      
-        }    
-        if(PINC.2 == 0)
+            close();
+        }     
+        else if(curBtn == leftBtn)
         {
-            OCR2A = 20;      
-        }  
-        if(PINC.3 == 0)
+            adjustLeft();
+        } 
+        else if(curBtn == rightBtn)
         {
-            OCR2A = 5;      
+            adjustRight();
         }
-        delay_ms(500);
+        else if(curBtn == upBtn)
+        {
+            adjustUp();
+        }
+        else if(curBtn == downBtn)
+        {
+            adjustDown();
+        }
+        delay_ms(200); 
       }
 }
