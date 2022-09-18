@@ -1,7 +1,8 @@
 RAM Allocation
 Variable                                                          Address   Size
 --------------------------------------------------------------------------------
-_base_y                                                           0x0300       4
+_base_y                                                           0x038A       4
+_seed                                                             0x038E       4
 
 EEPROM Allocation
 Variable                                                          Address   Size
@@ -10,6 +11,7 @@ Variable                                                          Address   Size
 Register Allocation
 Variable                                                          Register  Size
 --------------------------------------------------------------------------------
-_lcd_x                                                            R4           1
-_lcd_y                                                            R3           1
-_lcd_maxx                                                         R6           1
+distant                                                           R3,R4        2
+_lcd_x                                                            R6           1
+_lcd_y                                                            R5           1
+_lcd_maxx                                                         R8           1
