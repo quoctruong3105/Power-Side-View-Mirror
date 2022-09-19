@@ -1,6 +1,9 @@
 # Power-Side-View-Mirror
 + Knownlegde used in this project:
-  - Microcontroller: external interrupt, UART, SPI, LCD, declare registers.
-  - C language: loop, if-else structure, one-dimensional array, two-dimensional array.
-  - Automotive: working principle of immobilizer system.
-+ Working principle: when user enters ID characters in keypad, amplifier will send these characters to ECM, when ECM receive 8 characters, it will start comparing 8 entered characters with 8 previously registered characters. If the IDs match, the ECM sends a signal to the engine ECU and allows the engine ECU to operate. When the engine ECU is operating, it will send a signal to the ECM, the ECM will output a signal to notify the user that the engine has been operated. In case of incorrect input, the ECM will send a signal to the engine ECU and will not allow the engine to operate. If you enter the wrong ID more than 3 times, the burglar alarm system will be turned on.
+  - Microcontroller: Timer0(fastPWM), Timer2(fasPWM), Timer1(Counter), ADC, Declare registers. 
+  - Electronic: Ultrasonic Sensor, Voltage Divider. 
+  - C language: loop, if-else structure.
+  - Automotive: working principle of power side-view mirror.
++ Working principle: 
+  - Basic functions: fold/unfold, adjust left/right, up/down.
+  - Smart function: automatically folds when there is a possibility of a mirror collision at high speed. When the   mirror is in open mode, if the ultrasonic sensor detects an object 100cm away from the mirror, the system will     alert the driver. If the distance from the mirror to the object is less than 40cm and the vehicle continues to     move at a speed greater than 20 km/h, the system will automatically fold the mirror for protection. When the       object has been passed, the mirror will automatically be opened again. However, if the distance from the object   to the mirror is less than 40cm, but the vehicle moves at a speed of less than 20km/h. The system will             understand that the driver has actively slowed down to control a collision or is adjusting the car in a parking   lot, the system will only warn but not automatically fold the mirrors. Another noteworthy point is that the       mirror will automatically reopen if it is closed automatically for protection, this is different from the mirror   being closed by the driver pressing the folding button.
