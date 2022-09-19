@@ -1,0 +1,250 @@
+#include <mega328p.h>
+#include <delay.h>
+#include <alcd.h>
+#include <stdio.h>
+
+#define openBtn 1023
+#define closeBtn 731
+#define leftBtn 539
+#define rightBtn 394
+#define upBtn 269
+#define downBtn 146
+#define OC_DDR DDRB.3
+#define LR_DDR DDRD.3
+#define UD_DDR DDRD.6
+#define OC_PORT PORTB.3
+#define LR_PORT PORTB.3
+#define UD_PORT PORTB.6
+#define TRIGGER_DDR DDRB.1
+#define ECHO_DDR DDRB.0
+#define TRIGGER_PORT PORTB.1
+#define ECHO_PORT PORTB.0
+#define ADC_VREF_TYPE 0x40
+
+float distance;
+int timerOverFlow = 0;
+char status;
+
+interrupt [TIM1_OVF] void timer1_ovf_isr(void)
+{
+    timerOverFlow++;
+}
+
+
+// Read the AD conversion result
+unsigned int read_adc(unsigned char adc_input)
+{
+ADMUX=adc_input | (ADC_VREF_TYPE & 0xff);
+// Delay needed for the stabilization of the ADC input voltage
+delay_us(10);
+// Start the AD conversion
+ADCSRA|=0x40;
+// Wait for the AD conversion to complete                                                                                
+while ((ADCSRA & 0x10)==0);
+ADCSRA|=0x10;
+return ADCW;
+}
+
+void activeDistantSensor()
+{
+    unsigned int duration;
+    char buffer[16];
+    //char buffer[]; 
+    // Trigger generate pulse
+    TRIGGER_PORT = 1;
+    delay_ms(5);
+    TRIGGER_PORT = 0;  
+    // Delete timer1
+    TCNT1H = 0;
+    TCNT1L = 0; 
+    TCCR1B=0b01000001; // Catch rising edge mode
+    TIFR1 = 0b00100001; // Delete input capture and overflow flag  
+    
+    // Compute pulse width   
+    while(TIFR1 & (1 << ICF1) == 0); // Waiting rising edge
+    // Delete timer1
+    TCNT1H = 0;
+    TCNT1L = 0; 
+    TCCR1B=0b00000001; // Catch falling edge mode
+    TIFR1 = 0b00100001; // Delete input capture and overflow flag  
+    timerOverFlow = 0; // Delete timer1 value 
+    
+    while(TIFR1 & (1 << ICF1) == 0); // Waiting falling edge
+    duration = (ICR1L + ICR1H*256) + (65535 * timerOverFlow);    
+    distance = 1.0f*duration/466.47;
+    sprintf(buffer, "Dis: %0.3f cm", distance);  
+    lcd_gotoxy(0,1);
+    lcd_puts(buffer);  
+}               
+
+
+// Open mirror
+void open()
+{
+    OCR2A = 20;            
+    status = 'o'; // o is shorten of open     
+    delay_ms(1000);
+}
+
+// Close mirror
+void close()
+{
+    OCR2A = 5;  
+    OCR0B = 15;
+    OCR0A = 15; 
+    status = 'c'; // c is shorten of close
+    delay_ms(1000);   
+}
+
+// Adjust left
+void adjustLeft()
+{
+    if(OCR2B > 10)
+    {
+        OCR2B--; 
+    }   
+}
+
+// Adjust right
+void adjustRight()
+{
+    if(OCR2B < 19) 
+    {
+        OCR2B++;
+    }                
+}
+
+// Adjust up
+void adjustUp()
+{
+    if(OCR0A < 19) 
+    {
+        OCR0A++;  
+    }  
+}
+
+// Adjust down
+void adjustDown()
+{
+    if(OCR0A > 10)
+    {
+        OCR0A--;   
+    }
+}
+
+void main(void)
+{
+unsigned int curBtn;
+float vehicleSpeed;
+unsigned char dis[16];
+
+// Crystal Oscillator division factor: 1
+#pragma optsize-
+CLKPR=0x80;
+CLKPR=0x00;
+#ifdef _OPTIMIZE_SIZE_
+#pragma optsize+
+#endif
+
+// Timer/Counter 0 initialization
+TCCR0A=0b10000011;
+TCCR0B=0b00000101;
+TCNT0=0;
+OCR0A=15;
+OCR0B=0;
+
+// Timer/Counter 2 initialization
+TCCR2A=0b10100011;
+TCCR2B=0b00000111;
+TCNT2=0;
+OCR2A=0;
+OCR2B=15;
+
+// Timer/Counter 1 initialization
+TCCR1A=0x00; // Normal mode
+TIMSK1=0b00000001; // Allow interrupt when timer1 overflow
+
+// ADC initialization
+DIDR0=0x21;
+ADMUX=ADC_VREF_TYPE & 0xff;
+ADCSRA=0x84;
+
+// Characters/line: 16
+lcd_init(16);
+
+//Set up PWM Servo ports is output
+OC_DDR = 1;
+LR_DDR = 1;
+UD_DDR = 1;
+
+// Set up Trigger and Echo for Sensor
+TRIGGER_DDR = 1; // Trigger port is output
+ECHO_DDR = 0; // Echo port is input
+
+#asm("sei")
+
+while (1)
+      {    
+        lcd_clear();  
+        curBtn = read_adc(5); // Read the button that drivers pressed  
+        vehicleSpeed = 1.0f*read_adc(0)/10;
+        sprintf(dis, "Speed: %0.1f km/h", vehicleSpeed);  
+        lcd_gotoxy(0,0);
+        lcd_puts(dis);
+       
+        /*when mirror is opening, distant sensor is actived. 
+        Mirror will automatically be closed if distance less than 40 cm but vehicle still running (speed > 0)*/  
+        if(status == 'o')
+        {   
+            activeDistantSensor();  
+            if(distance < 100 && vehicleSpeed > 0)
+            {
+                lcd_gotoxy(0,1);
+                lcd_puts("Object Detection"); 
+            }                                 
+            if(distance < 40 && vehicleSpeed > 20)
+            {
+                close(); 
+                status = 'a'; // a is shorten of automatic close. This help distinguish between automatic closing and active closing.
+            } 
+        }   
+        
+        /*when the object in front of mirror overcame, vehicle is still running, mirror is opened again*/
+        if(status == 'a' && vehicleSpeed > 0)
+        {
+            activeDistantSensor(); 
+            if(distance >= 40 || vehicleSpeed <= 20)
+            {
+                open();
+            }      
+        }
+        
+        // Adjust mirror     
+        if(curBtn == openBtn)
+        {
+            open();            
+        }   
+        else if(curBtn == closeBtn)
+        {
+            close();
+        }     
+        else if(curBtn == leftBtn)
+        {
+            adjustLeft();
+        } 
+        else if(curBtn == rightBtn)
+        {
+            adjustRight();
+        }
+        else if(curBtn == upBtn)
+        {
+            adjustUp();
+        }
+        else if(curBtn == downBtn)
+        {
+            adjustDown();
+        }     
+        
+        delay_ms(200); 
+      }
+}
