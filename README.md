@@ -1,4 +1,6 @@
 # Power-Side-View-Mirror
++ This is a self-study project to practice and improve skills.
++ Tasks: Simulate circuit diagram on Proteus, build code in Codevision and load hex file to AVR microcontroller, test system and debug,...
 + Knowledge used in this project:
   - Microcontroller: Timer0(fastPWM), Timer2(fasPWM), Timer1(Counter), ADC, declare registers.
   - Electronic: Ultrasonic Sensor, Voltage Divider.
