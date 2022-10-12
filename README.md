@@ -3,7 +3,7 @@
 + Tools: Proteus, Codevision
 + Tasks: Simulate circuit diagram on Proteus, build code in Codevision and load hex file to AVR microcontroller, test system and debug,...
 + Knowledge used in this project:
-  - Microcontroller: Timer0(fastPWM), Timer2(fasPWM), Timer1(Counter), ADC, declare registers.
+  - Microcontroller: Timer0(fastPWM), Timer2(fasPWM), Timer1(Counter), ADC, Declaring registers.
   - Electronic: Ultrasonic Sensor, Voltage Divider.
   - C language: loop, if-else structure.
   - Automotive: working principle of the power side-view mirror.
